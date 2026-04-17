@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <meta name="theme-color" content="#07071a"/>
+  <meta name="description" content="TimeFlow — AI-powered smart time management planner"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="TimeFlow"/>
+  <title>TimeFlow — Smart Planner</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+
+<!-- ========== AUTH SCREEN ========== -->
+<div id="authScreen">
+  <div class="auth-bg">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+  </div>
+
+  <div class="auth-card" id="authCard">
+    <!-- LOGO -->
+    <div class="auth-logo">
+      <svg viewBox="0 0 80 80" fill="none">
+        <defs>
+          <linearGradient id="lg1" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#6c63ff"/>
+            <stop offset="100%" stop-color="#ff6584"/>
+          </linearGradient>
+        </defs>
+        <rect x="8" y="8" width="64" height="64" rx="18" fill="url(#lg1)"/>
+        <circle cx="40" cy="38" r="18" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2.5"/>
+        <line x1="40" y1="38" x2="40" y2="24" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="40" y1="38" x2="51" y2="44" stroke="rgba(255,255,255,0.7)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="40" cy="38" r="2.8" fill="white"/>
+      </svg>
+    </div>
+    <h1 class="auth-title">TimeFlow</h1>
+    <p class="auth-sub">Plan smarter. Achieve more.</p>
+
+    <!-- TAB SWITCHER -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Sign Up</button>
+    </div>
+
+    <!-- ---- SIGN IN FORM ---- -->
+    <div id="formLogin">
+      <!-- Google Button -->
+      <button class="google-btn" onclick="signInWithGoogle()">
+        <svg width="18" height="18" viewBox="0 0 48 48">
+          <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34.5 6.5 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16.1 19 13 24 13c3.1 0 5.8 1.2 8 3l5.7-5.7C34.5 6.5 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.1l-6.2-5.2C29.3 35.5 26.8 36 24 36c-5.2 0-9.7-3.3-11.3-8H6.3C9.7 35.7 16.3 44 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.1-2.2 4-4 5.4l.1-.1 6.2 5.2C37.3 39.1 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/>
+        </svg>
+        Continue with Google
+      </button>
+
+      <div class="divider"><span>or sign in with email</span></div>
+
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <div class="input-eye-wrap">
+          <input class="form-input" id="loginPassword" type="password" placeholder="Your password" autocomplete="current-password"/>
+          <button class="eye-btn" onclick="toggleEye('loginPassword',this)">👁</button>
+        </div>
+      </div>
+      <div style="text-align:right;margin-bottom:16px;">
+        <button class="link-btn" onclick="forgotPassword()">Forgot password?</button>
+      </div>
+      <button class="submit-btn" onclick="signInWithEmail()">Sign In</button>
+      <p class="auth-note">Don't have an account? <button class="link-btn" onclick="switchAuthTab('register')">Sign Up</button></p>
+    </div>
+
+    <!-- ---- SIGN UP FORM ---- -->
+    <div id="formRegister" style="display:none;">
+      <button class="google-btn" onclick="signInWithGoogle()">
+        <svg width="18" height="18" viewBox="0 0 48 48">
+          <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34.5 6.5 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16.1 19 13 24 13c3.1 0 5.8 1.2 8 3l5.7-5.7C34.5 6.5 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.1l-6.2-5.2C29.3 35.5 26.8 36 24 36c-5.2 0-9.7-3.3-11.3-8H6.3 C9.7 35.7 16.3 44 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.1-2.2 4-4 5.4l.1-.1 6.2 5.2C37.3 39.1 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/>
+        </svg>
+        Sign up with Google
+      </button>
+
+      <div class="divider"><span>or create an account</span></div>
+
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input class="form-input" id="regName" type="text" placeholder="Your name" autocomplete="name"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="regEmail" type="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password <span style="color:var(--text3);font-size:10px;">(min 6 characters)</span></label>
+        <div class="input-eye-wrap">
+          <input class="form-input" id="regPassword" type="password" placeholder="Create a password" autocomplete="new-password"/>
+          <button class="eye-btn" onclick="toggleEye('regPassword',this)">👁</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm Password</label>
+        <div class="input-eye-wrap">
+          <input class="form-input" id="regConfirm" type="password" placeholder="Repeat password" autocomplete="new-password"/>
+          <button class="eye-btn" onclick="toggleEye('regConfirm',this)">👁</button>
+        </div>
+      </div>
+      <button class="submit-btn" onclick="registerWithEmail()">Create Account</button>
+      <p class="auth-note">Already have an account? <button class="link-btn" onclick="switchAuthTab('login')">Sign In</button></p>
+    </div>
+
+    <!-- Loading state -->
+    <div id="authLoading" style="display:none;text-align:center;padding:24px 0;">
+      <div class="spinner"></div>
+      <p style="color:var(--text2);font-size:13px;margin-top:12px;" id="authLoadingMsg">Signing in...</p>
+    </div>
+
+    <p class="auth-legal">🔒 Secured by Firebase Auth. Your data is private.</p>
+  </div>
+</div>
+
+<!-- ========== APP SHELL ========== -->
+<div id="appShell" class="hidden">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-logo">⏱ TimeFlow</span>
+    </div>
+    <div class="topbar-right">
+      <button class="add-task-top-btn" onclick="openModal()">+ Task</button>
+      <div class="user-pill">
+        <div class="user-avatar" id="userAvatarTop"></div>
+        <span class="user-name" id="userNameTop">...</span>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()">Sign out</button>
+    </div>
+  </header>
+
+  <div class="main-layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="nav-section-label">Menu</div>
+      <div class="nav-item active" data-page="today"     onclick="showPage('today',this)">    <span class="nav-icon">🏠</span><span>Today</span></div>
+      <div class="nav-item"        data-page="calendar"  onclick="showPage('calendar',this)"> <span class="nav-icon">📅</span><span>Calendar</span></div>
+      <div class="nav-item"        data-page="tasks"     onclick="showPage('tasks',this)">    <span class="nav-icon">✅</span><span>All Tasks</span></div>
+      <div class="nav-item"        data-page="analytics" onclick="showPage('analytics',this)"><span class="nav-icon">📊</span><span>Analytics</span></div>
+      <div class="nav-section-label">Categories</div>
+      <div class="nav-item" onclick="filterByTag('work')">    <span class="nav-icon">💼</span><span>Work</span></div>
+      <div class="nav-item" onclick="filterByTag('personal')"><span class="nav-icon">🏡</span><span>Personal</span></div>
+      <div class="nav-item" onclick="filterByTag('health')">  <span class="nav-icon">💪</span><span>Health</span></div>
+      <div class="nav-item" onclick="filterByTag('study')">   <span class="nav-icon">📚</span><span>Study</span></div>
+      <div class="sidebar-bottom">
+        <button class="sidebar-add-btn" onclick="openModal()"><span style="font-size:18px">+</span> Add Task</button>
+      </div>
+    </nav>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <main class="content">
+
+      <!-- TODAY -->
+      <section class="page active" id="page-today">
+        <div class="page-header">
+          <div class="page-title" id="todayTitle">Good Morning ☀️</div>
+          <div class="page-sub"   id="todayDate"></div>
+        </div>
+        <div class="ai-banner">
+          <div class="ai-icon">🤖</div>
+          <div class="ai-text">
+            <div class="ai-title">AI Schedule Optimizer</div>
+            <div class="ai-sub">Auto-arrange today's tasks by priority for maximum output</div>
+          </div>
+          <button class="ai-btn" onclick="aiOptimize()">✨ Optimize</button>
+        </div>
+        <div class="stats-row"  id="statsRow"></div>
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-hdr"><span class="panel-title">Today's Tasks</span><span class="panel-sub" id="todayCount"></span></div>
+            <div id="todayTaskList"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-hdr"><span class="panel-title">⏰ Smart Timeline</span></div>
+            <div id="timelineSlots"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CALENDAR -->
+      <section class="page" id="page-calendar">
+        <div class="page-header">
+          <div class="page-title">📅 Calendar</div>
+          <div class="page-sub">Click any day to view or add tasks</div>
+        </div>
+        <div class="cal-toolbar">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="cal-title" id="calTitle"></span>
+            <button class="cal-nav-btn" onclick="changeMonth(-1)">‹</button>
+            <button class="cal-nav-btn" onclick="changeMonth(1)">›</button>
+          </div>
+          <div style="display:flex;gap:4px;">
+            <button class="view-btn active" onclick="setCalView('month',this)">Month</button>
+            <button class="view-btn"        onclick="setCalView('week',this)">Week</button>
+          </div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div id="selectedDayPanel" style="margin-top:20px;"></div>
+      </section>
+
+      <!-- ALL TASKS -->
+      <section class="page" id="page-tasks">
+        <div class="page-header">
+          <div class="page-title">✅ All Tasks</div>
+          <div class="page-sub" id="tasksPageSub"></div>
+        </div>
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterAllTasks('all',this)">All</button>
+          <button class="filter-btn" onclick="filterAllTasks('work',this)">💼 Work</button>
+          <button class="filter-btn" onclick="filterAllTasks('personal',this)">🏡 Personal</button>
+          <button class="filter-btn" onclick="filterAllTasks('health',this)">💪 Health</button>
+          <button class="filter-btn" onclick="filterAllTasks('study',this)">📚 Study</button>
+          <button class="filter-btn" onclick="filterAllTasks('pending',this)">⏳ Pending</button>
+          <button class="filter-btn" onclick="filterAllTasks('done',this)">✅ Done</button>
+        </div>
+        <div class="panel"><div id="allTasksList"></div></div>
+      </section>
+
+      <!-- ANALYTICS -->
+      <section class="page" id="page-analytics">
+        <div class="page-header">
+          <div class="page-title">📊 Analytics</div>
+          <div class="page-sub">Your productivity insights</div>
+        </div>
+        <div class="stats-row" id="analyticsStats"></div>
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-hdr"><span class="panel-title">Tasks by Category</span></div>
+            <div id="categoryChart" style="padding:8px 0;"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-hdr"><span class="panel-title">Completion Rate</span></div>
+            <div id="completionChart"></div>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:16px;">
+          <div class="panel-hdr"><span class="panel-title">📅 Last 7 Days</span></div>
+          <div id="weeklyChart" style="padding:8px 0;"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ========== ADD TASK MODAL ========== -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span id="modalTitleText">➕ New Task</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Task Name *</label>
+      <input class="form-input" id="taskName" placeholder="What needs to be done?"/>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date *</label>
+        <input class="form-input" id="taskDate" type="date"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Start Time</label>
+        <input class="form-input" id="taskTime" type="time"/>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Duration (min)</label>
+        <input class="form-input" id="taskDuration" type="number" placeholder="60" min="5" max="480"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select class="form-input" id="taskTag">
+          <option value="work">💼 Work</option>
+          <option value="personal">🏡 Personal</option>
+          <option value="health">💪 Health</option>
+          <option value="study">📚 Study</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Priority</label>
+      <div class="priority-row" id="priorityRow">
+        <button class="pri-btn active" data-p="high" onclick="setPri('high',this)">🔴 High</button>
+        <button class="pri-btn"        data-p="med"  onclick="setPri('med',this)"> 🟡 Medium</button>
+        <button class="pri-btn"        data-p="low"  onclick="setPri('low',this)"> 🟢 Low</button>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea class="form-input" id="taskNotes" rows="2" placeholder="Extra details..."></textarea>
+    </div>
+    <button class="submit-btn" onclick="saveTask()">💾 Save Task</button>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<!-- ========== FIREBASE SDK ========== -->
+<!-- Firebase v9 compat (works without bundler) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<script src="js/firebase-config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/tasks.js"></script>
+<script src="js/calendar.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+# TimeFlow PWA — Complete Setup Guide
+# Both Google Sign-In AND Email/Password Login via Firebase
+# No credit card needed!
+
+=====================================================================
+ WHAT YOU NEED (all free, no payment required)
+=====================================================================
+- A Google account (gmail)
+- Firebase account  → https://console.firebase.google.com  (FREE)
+- Netlify account   → https://netlify.com                  (FREE)
+
+=====================================================================
+ STEP 1 — Create a Firebase Project (5 minutes)
+=====================================================================
+
+1. Go to: https://console.firebase.google.com
+2. Click "Add project"
+3. Name it: TimeFlow  →  Continue
+4. Disable Google Analytics (not needed) → Create project
+5. Wait for it to set up (~30 seconds) → Continue
+
+---------------------------------------------------------------------
+ STEP 2 — Enable Authentication (2 minutes)
+---------------------------------------------------------------------
+
+1. In your Firebase project, click "Authentication" in the left menu
+2. Click "Get started"
+3. Click the "Sign-in method" tab
+
+4. Enable EMAIL/PASSWORD:
+   - Click "Email/Password"
+   - Toggle "Enable" ON
+   - Click Save
+
+5. Enable GOOGLE:
+   - Click "Google"
+   - Toggle "Enable" ON
+   - Enter your email as the support email
+   - Click Save
+
+✅ Both login methods are now enabled — NO payment needed!
+
+---------------------------------------------------------------------
+ STEP 3 — Set Up Firestore Database (2 minutes)
+---------------------------------------------------------------------
+
+1. In Firebase left menu → click "Firestore Database"
+2. Click "Create database"
+3. Choose "Start in test mode" (allows read/write for 30 days)
+   → Next → Select a location close to you → Enable
+
+4. After 30 days, go to Firestore → Rules tab, and replace with:
+
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /users/{userId}/{document=**} {
+         allow read, write: if request.auth != null && request.auth.uid == userId;
+       }
+     }
+   }
+
+   Click "Publish" — this makes it so only logged-in users
+   can access their own data.
+
+---------------------------------------------------------------------
+ STEP 4 — Get Your Firebase Config (1 minute)
+---------------------------------------------------------------------
+
+1. In Firebase → click the gear icon ⚙️ → "Project settings"
+2. Scroll down to "Your apps" section
+3. Click the </> (Web) icon
+4. App nickname: TimeFlow Web → click "Register app"
+5. You will see a config object like this:
+
+   const firebaseConfig = {
+     apiKey: "AIzaSy...",
+     authDomain: "timeflow-xyz.firebaseapp.com",
+     projectId: "timeflow-xyz",
+     storageBucket: "timeflow-xyz.appspot.com",
+     messagingSenderId: "123456789",
+     appId: "1:123456789:web:abc123"
+   };
+
+6. COPY this entire config object
+
+7. Open the file: js/firebase-config.js
+8. REPLACE the placeholder config with your real one:
+   Find the block starting with:
+     const firebaseConfig = {
+       apiKey: "YOUR_API_KEY",
+       ...
+   Replace the whole block with your copied config.
+
+9. Save the file.
+
+=====================================================================
+ STEP 5 — Deploy to Netlify (2 minutes, free HTTPS)
+=====================================================================
+
+METHOD A — Drag & Drop (Easiest)
+
+1. Go to: https://app.netlify.com
+2. Sign up free with Google
+3. On your dashboard you'll see a drag-drop zone:
+   "Drag and drop your site output folder here"
+4. Drag your entire "timeflow2" folder into it
+5. Wait ~30 seconds
+6. You get a URL like: https://luminous-toad-abc123.netlify.app
+7. COPY this URL — you'll need it for the next step
+
+METHOD B — GitHub (Better for updates)
+
+1. Create free GitHub account: https://github.com
+2. Create new repository → name it "timeflow"
+3. Upload all files from the timeflow2 folder
+4. Netlify → "Add new site" → "Import from Git" → select your repo
+5. Leave build settings blank → "Deploy site"
+6. Copy your Netlify URL
+
+---------------------------------------------------------------------
+ STEP 6 — Add Your Netlify URL to Firebase (1 minute)
+---------------------------------------------------------------------
+
+This step is required so Google Sign-In works on your live site.
+
+1. Go to Firebase Console → Authentication
+2. Click "Settings" tab (next to "Users")
+3. Scroll to "Authorized domains"
+4. Click "Add domain"
+5. Paste your Netlify URL (without https://):
+   Example: luminous-toad-abc123.netlify.app
+6. Click "Add"
+
+✅ Done! Your live PWA is ready.
+
+=====================================================================
+ STEP 7 — Test Your Live App
+=====================================================================
+
+1. Open your Netlify URL in a browser
+2. Try "Sign up with email" — create an account
+3. Try "Continue with Google" — sign in with Google
+4. Add some tasks and check they appear
+5. Open the same URL on your phone — it should work!
+6. Optionally install it:
+   - Android (Chrome): Menu → "Add to Home screen"
+   - iPhone (Safari):  Share → "Add to Home Screen"
+
+=====================================================================
+ FILE STRUCTURE
+=====================================================================
+
+timeflow2/
+├── index.html              ← Full app (all pages + auth)
+├── manifest.json           ← PWA install config
+├── sw.js                   ← Service Worker (offline support)
+├── css/
+│   └── style.css           ← All styles
+├── js/
+│   ├── firebase-config.js  ← ★ PUT YOUR FIREBASE CONFIG HERE ★
+│   ├── auth.js             ← Google + Email/Password login
+│   ├── storage.js          ← Firestore cloud sync + local cache
+│   ├── tasks.js            ← Add/edit/delete tasks + AI optimizer
+│   ├── calendar.js         ← Month + week calendar views
+│   ├── analytics.js        ← Charts and productivity stats
+│   └── app.js              ← Main controller + SW registration
+└── icons/                  ← All PWA icons (pre-generated)
+
+=====================================================================
+ TROUBLESHOOTING
+=====================================================================
+
+"Firebase not initialized" error:
+→ You haven't replaced the config in js/firebase-config.js.
+  Double check you pasted the full config block correctly.
+
+Google Sign-In popup closes immediately:
+→ Your Netlify domain is not added to Firebase Authorized domains.
+  Follow Step 6 again carefully.
+
+"Permission denied" from Firestore:
+→ Your Firestore is in test mode (30 days) or the security rules
+  need updating. Go to Firestore → Rules and use the rules in Step 3.
+
+Tasks not syncing between devices:
+→ Make sure you're logged in with the SAME account on both devices.
+
+App not installable on iPhone:
+→ Must use Safari browser (not Chrome) on iPhone.
+
+"auth/operation-not-allowed" error:
+→ Email/Password or Google auth not enabled in Firebase Console.
+  Go back to Step 2 and make sure both are turned ON.
+
+=====================================================================
+ QUICK CHECKLIST
+=====================================================================
+
+[ ] Created Firebase project
+[ ] Enabled Email/Password auth
+[ ] Enabled Google auth
+[ ] Created Firestore database (test mode is fine)
+[ ] Copied Firebase config into js/firebase-config.js
+[ ] Deployed to Netlify
+[ ] Added Netlify domain to Firebase Authorized domains
+[ ] Tested both login methods
+[ ] Installed on phone home screen
