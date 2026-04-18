@@ -284,10 +284,25 @@
         <label class="form-label">Date *</label>
         <input class="form-input" id="taskDate" type="date"/>
       </div>
-      <div class="form-group">
-        <label class="form-label">Start Time</label>
-        <input class="form-input" id="taskTime" type="time"/>
+<div class="form-group">
+  <label class="form-label">Start Time</label>
+  <div class="time-picker-wrap" id="timePickerWrap">
+    <div class="time-picker-display" id="timePickerDisplay" onclick="toggleTimePicker()">
+      <span id="timeDisplayText">--:--</span>
+      <span style="color:var(--text3);font-size:12px;">🕐</span>
+    </div>
+    <div class="time-picker-dropdown" id="timePickerDropdown">
+      <div class="time-picker-cols">
+        <div class="tp-col" id="hourCol"></div>
+        <div class="tp-sep">:</div>
+        <div class="tp-col" id="minCol"></div>
       </div>
+      <div class="tp-confirm" onclick="confirmTime()">✓ Set Time</div>
+    </div>
+  </div>
+  <!-- hidden input to hold actual value -->
+  <input type="hidden" id="taskTime"/>
+</div>
     </div>
     <div class="form-row">
       <div class="form-group">
