@@ -3,7 +3,7 @@ import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 webpush.setVapidDetails(
-  'mailto:sisumon2318@gmail.com',
+  'mailto:beckham221b@gmail.com',
   process.env.VAPID_PUBLIC,
   process.env.VAPID_PRIVATE
 );
