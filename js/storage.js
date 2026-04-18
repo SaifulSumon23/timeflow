@@ -29,6 +29,7 @@ function loadTasks() {
       // Also cache locally for offline access
       try { localStorage.setItem('tf_tasks_' + currentUser.uid, JSON.stringify(tasks)); } catch(e) {}
       refreshCurrentPage();
+      document.dispatchEvent(new Event('tasks-updated'));
     },
     err => {
       console.warn('[Storage] Firestore error, using local cache:', err);
