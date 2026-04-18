@@ -396,3 +396,467 @@ window.closeModal = function() {
   if (dd) dd.classList.remove('open');
   if (_origClose) _origClose();
 };
+
+/* ═══════════════════════════════════════════
+   NOTIFICATIONS, SOUNDS, PARTICLES, CHATBOT
+═══════════════════════════════════════════ */
+
+/* ── 1. NOTIFICATION PERMISSION & REMINDERS ── */
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') showToast('🔔 Notifications enabled!', 'success');
+  }
+}
+
+function scheduleTaskReminders(taskList) {
+  if (!navigator.serviceWorker.controller) return;
+  if (Notification.permission !== 'granted') return;
+
+  taskList.forEach(task => {
+    if (task.done || !task.time || !task.date) return;
+
+    const taskDateTime = new Date(`${task.date}T${task.time}`);
+    const now = Date.now();
+
+    [18, 10].forEach(mins => {
+      const fireAt = taskDateTime.getTime() - mins * 60 * 1000;
+      const delay  = fireAt - now;
+      if (delay < 0) return; // already passed
+
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_REMINDER',
+        taskName: task.name || task.title || 'Task',
+        minutesBefore: mins,
+        delayMs: delay
+      });
+    });
+  });
+}
+
+/* Call this after tasks load */
+function initReminders() {
+  requestNotificationPermission();
+  if (typeof tasks !== 'undefined') scheduleTaskReminders(tasks);
+}
+
+setTimeout(initReminders, 3000);
+
+/* ── 2. SOUND ENGINE ── */
+function createAudioContext() {
+  return new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playClapSound() {
+  try {
+    const ctx  = createAudioContext();
+    const time = ctx.currentTime;
+
+    // Multiple noise bursts for clap effect
+    for (let i = 0; i < 3; i++) {
+      const buf    = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+      const data   = buf.getChannelData(0);
+      for (let j = 0; j < data.length; j++) data[j] = (Math.random() * 2 - 1);
+
+      const src    = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain   = ctx.createGain();
+
+      src.buffer    = buf;
+      filter.type   = 'bandpass';
+      filter.frequency.value = 1200 + i * 300;
+      filter.Q.value = 0.8;
+
+      gain.gain.setValueAtTime(0.4 - i * 0.1, time + i * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + i * 0.04 + 0.12);
+
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(time + i * 0.04);
+    }
+  } catch(e) { /* silent fail */ }
+}
+
+function playNotificationSound() {
+  try {
+    const ctx  = createAudioContext();
+    const time = ctx.currentTime;
+    [523, 659, 784].forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, time + i * 0.15);
+      gain.gain.setValueAtTime(0.3, time + i * 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + i * 0.15 + 0.3);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(time + i * 0.15);
+      osc.stop(time + i * 0.15 + 0.35);
+    });
+  } catch(e) { /* silent fail */ }
+}
+
+/* Patch toggleTask to play clap */
+const _origToggleTask = window.toggleTask;
+window.toggleTask = function(id) {
+  const t = (typeof tasks !== 'undefined') ? tasks.find(t => t.id === id) : null;
+  if (t && !t.done) {
+    playClapSound();
+    launchConfetti();
+  }
+  if (_origToggleTask) _origToggleTask(id);
+};
+
+/* ── 3. FLOATING PARTICLES ── */
+function initParticles() {
+  const canvas = document.createElement('canvas');
+  canvas.id = 'particleCanvas';
+  canvas.style.cssText = `
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    pointer-events:none; z-index:0; opacity:0.55;
+  `;
+  document.body.prepend(canvas);
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const COLORS = ['#6c63ff','#ff6584','#43e97b','#f6c90e','#00d4ff'];
+  const pts = Array.from({ length: 55 }, () => ({
+    x:  Math.random() * canvas.width,
+    y:  Math.random() * canvas.height,
+    vx: (Math.random() - 0.5) * 0.35,
+    vy: (Math.random() - 0.5) * 0.35,
+    r:  Math.random() * 1.6 + 0.5,
+    c:  COLORS[Math.floor(Math.random() * COLORS.length)],
+    o:  Math.random() * 0.5 + 0.2
+  }));
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    /* Connections */
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[i].x - pts[j].x;
+        const dy = pts[i].y - pts[j].y;
+        const d  = Math.sqrt(dx*dx + dy*dy);
+        if (d < 110) {
+          ctx.beginPath();
+          ctx.moveTo(pts[i].x, pts[i].y);
+          ctx.lineTo(pts[j].x, pts[j].y);
+          ctx.strokeStyle = `rgba(108,99,255,${0.12 * (1 - d/110)})`;
+          ctx.lineWidth = 0.6;
+          ctx.stroke();
+        }
+      }
+    }
+
+    /* Dots */
+    pts.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0 || p.x > canvas.width)  p.vx *= -1;
+      if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+      ctx.fillStyle = p.c;
+      ctx.globalAlpha = p.o;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+initParticles();
+
+/* ── 4. AI CHATBOT ── */
+function initChatbot() {
+  /* Button */
+  const btn = document.createElement('div');
+  btn.id = 'chatbotBtn';
+  btn.innerHTML = '🤖';
+  btn.title = 'AI Assistant';
+  btn.style.cssText = `
+    position:fixed; bottom:24px; left:24px;
+    width:52px; height:52px; border-radius:50%;
+    background:linear-gradient(135deg,#6c63ff,#ff6584);
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px; cursor:pointer; z-index:400;
+    box-shadow:0 4px 20px rgba(108,99,255,0.5);
+    animation:mascotFloat 3s ease-in-out infinite;
+    transition:transform 0.2s;
+  `;
+  btn.addEventListener('mouseenter', () => btn.style.transform = 'scale(1.15)');
+  btn.addEventListener('mouseleave', () => btn.style.transform = 'scale(1)');
+  btn.addEventListener('click', toggleChatbot);
+  document.body.appendChild(btn);
+
+  /* Panel */
+  const panel = document.createElement('div');
+  panel.id = 'chatbotPanel';
+  panel.style.cssText = `
+    position:fixed; bottom:88px; left:24px;
+    width:320px; max-height:460px;
+    background:#0e0e2a; border:1px solid rgba(108,99,255,0.3);
+    border-radius:20px; z-index:400; display:none; flex-direction:column;
+    box-shadow:0 20px 60px rgba(0,0,0,0.6);
+    animation:dropIn 0.3s ease;
+    overflow:hidden;
+  `;
+  panel.innerHTML = `
+    <div style="padding:14px 18px;background:linear-gradient(135deg,rgba(108,99,255,0.2),rgba(255,101,132,0.1));
+      border-bottom:1px solid rgba(108,99,255,0.2);display:flex;align-items:center;gap:10px;">
+      <span style="font-size:20px;">🤖</span>
+      <div>
+        <div style="font-weight:700;font-size:14px;color:#e8e8ff;">TimeFlow Assistant</div>
+        <div style="font-size:11px;color:#9090b8;">Always here to help</div>
+      </div>
+      <button onclick="toggleChatbot()" style="margin-left:auto;background:none;border:none;
+        color:#9090b8;font-size:16px;cursor:pointer;">✕</button>
+    </div>
+    <div id="chatMessages" style="flex:1;overflow-y:auto;padding:14px;display:flex;
+      flex-direction:column;gap:10px;max-height:300px;
+      scrollbar-width:thin;scrollbar-color:#6c63ff #1c1c3a;">
+    </div>
+    <div style="padding:10px 14px;border-top:1px solid rgba(108,99,255,0.15);display:flex;gap:8px;">
+      <input id="chatInput" placeholder="Ask me anything..." style="flex:1;background:#13132f;
+        border:1px solid rgba(108,99,255,0.2);color:#e8e8ff;border-radius:10px;
+        padding:9px 12px;font-size:13px;outline:none;font-family:'DM Sans',sans-serif;"
+        onkeydown="if(event.key==='Enter')sendChat()"/>
+      <button onclick="sendChat()" style="background:linear-gradient(135deg,#6c63ff,#8b7cf8);
+        border:none;color:#fff;border-radius:10px;padding:9px 14px;
+        font-size:14px;cursor:pointer;font-weight:700;">➤</button>
+    </div>
+  `;
+  document.body.appendChild(panel);
+
+  /* Welcome message */
+  addBotMessage('👋 Hi! I\'m your TimeFlow assistant. Ask me anything about managing your tasks, productivity tips, or how to use the app!');
+}
+
+function toggleChatbot() {
+  const panel = document.getElementById('chatbotPanel');
+  if (!panel) return;
+  const isOpen = panel.style.display === 'flex';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen) document.getElementById('chatInput')?.focus();
+}
+
+function addBotMessage(text) {
+  const msgs = document.getElementById('chatMessages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  div.style.cssText = `
+    background:rgba(108,99,255,0.12); border:1px solid rgba(108,99,255,0.2);
+    border-radius:14px 14px 14px 4px; padding:10px 14px;
+    font-size:13px; color:#e8e8ff; line-height:1.5; max-width:90%;
+  `;
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addUserMessage(text) {
+  const msgs = document.getElementById('chatMessages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  div.style.cssText = `
+    background:rgba(255,101,132,0.12); border:1px solid rgba(255,101,132,0.2);
+    border-radius:14px 14px 4px 14px; padding:10px 14px;
+    font-size:13px; color:#e8e8ff; line-height:1.5;
+    max-width:90%; align-self:flex-end; margin-left:auto;
+  `;
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addUserMessage(text);
+
+  // Typing indicator
+  const msgs = document.getElementById('chatMessages');
+  const typing = document.createElement('div');
+  typing.style.cssText = `
+    background:rgba(108,99,255,0.08);border:1px solid rgba(108,99,255,0.15);
+    border-radius:14px 14px 14px 4px;padding:10px 14px;
+    font-size:13px;color:#9090b8;
+  `;
+  typing.textContent = '🤖 Typing...';
+  msgs.appendChild(typing);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  setTimeout(() => {
+    typing.remove();
+    addBotMessage(getBotReply(text.toLowerCase()));
+  }, 800);
+}
+
+function getBotReply(q) {
+  const replies = [
+    { keys: ['add','task','create','new'],
+      ans: '➕ To add a task, click the "+ Task" button in the top bar or the "Add Task" button in the sidebar. Fill in the name, date, time, and priority!' },
+    { keys: ['delete','remove','trash'],
+      ans: '🗑️ Hover over any task and click the red × button that appears on the right to delete it.' },
+    { keys: ['complete','done','finish','check'],
+      ans: '✅ Click the checkbox circle on the left of any task to mark it as complete. You\'ll get a confetti celebration! 🎉' },
+    { keys: ['reminder','notification','alert'],
+      ans: '🔔 TimeFlow automatically reminds you 18 and 10 minutes before each task — even when you\'re not in the app! Make sure notifications are allowed.' },
+    { keys: ['offline','internet','connection'],
+      ans: '📶 TimeFlow works fully offline! Your tasks are saved locally and will sync to the cloud automatically when you reconnect.' },
+    { keys: ['install','apk','phone','app','home'],
+      ans: '📱 Click the "Install App" button in the top bar to install TimeFlow on your phone or desktop. It works just like a native app!' },
+    { keys: ['priority','high','medium','low'],
+      ans: '🎯 When adding a task, choose High 🔴, Medium 🟡, or Low 🟢 priority. High priority tasks appear first in your timeline!' },
+    { keys: ['category','tag','work','study','health','personal'],
+      ans: '🏷️ You can tag tasks as Work 💼, Personal 🏡, Health 💪, or Study 📚. Filter tasks by category using the sidebar!' },
+    { keys: ['ai','optimize','smart'],
+      ans: '🤖 Click "✨ Optimize" on the Today page to let AI automatically arrange your tasks by priority and time for maximum productivity!' },
+    { keys: ['calendar'],
+      ans: '📅 The Calendar view shows all your tasks by date. Click any day to see tasks for that day or add a new one!' },
+    { keys: ['analytics','stats','chart'],
+      ans: '📊 Visit the Analytics page to see your task completion rate, category breakdown, and 7-day productivity trends!' },
+    { keys: ['sound','clap','music'],
+      ans: '👏 You\'ll hear a satisfying clap sound whenever you complete a task! Enjoy the dopamine hit! 🎊' },
+    { keys: ['hello','hi','hey','help'],
+      ans: '👋 Hello! I\'m here to help you get the most out of TimeFlow. Ask me about adding tasks, notifications, offline mode, or any feature!' },
+    { keys: ['time','duration','long'],
+      ans: '⏱️ When adding a task, set the start time and duration (in minutes). The Smart Timeline on the Today page shows all tasks laid out by time!' },
+  ];
+
+  for (const r of replies) {
+    if (r.keys.some(k => q.includes(k))) return r.ans;
+  }
+
+  return '🤔 I\'m not sure about that. Try asking about: adding tasks, notifications, offline mode, priorities, categories, the calendar, or analytics!';
+}
+
+/* ── 5. INSTALL PWA BUTTON ── */
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallButton();
+});
+
+function showInstallButton() {
+  if (document.getElementById('installBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'installBtn';
+  btn.innerHTML = '📲 Install App';
+  btn.style.cssText = `
+    background:linear-gradient(135deg,#43e97b,#38f9d7);
+    color:#07071a; border:none; padding:7px 14px;
+    border-radius:8px; font-size:12px; font-weight:700;
+    cursor:pointer; font-family:'DM Sans',sans-serif;
+    transition:all 0.2s;
+  `;
+  btn.addEventListener('mouseenter', () => {
+    btn.style.transform = 'translateY(-2px)';
+    btn.style.boxShadow = '0 4px 16px rgba(67,233,123,0.5)';
+  });
+  btn.addEventListener('mouseleave', () => {
+    btn.style.transform = '';
+    btn.style.boxShadow = '';
+  });
+  btn.addEventListener('click', installApp);
+
+  const topbarRight = document.querySelector('.topbar-right');
+  if (topbarRight) topbarRight.prepend(btn);
+}
+
+async function installApp() {
+  if (!deferredInstallPrompt) {
+    showToast('📱 Open in Chrome and use "Add to Home Screen" to install!', 'info');
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    showToast('🎉 TimeFlow installed successfully!', 'success');
+    document.getElementById('installBtn')?.remove();
+  }
+  deferredInstallPrompt = null;
+}
+
+window.addEventListener('appinstalled', () => {
+  showToast('✅ App installed! Find it on your home screen.', 'success');
+  document.getElementById('installBtn')?.remove();
+});
+
+/* ── 6. ONLINE/OFFLINE SYNC ── */
+function initOfflineSync() {
+  window.addEventListener('online', () => {
+    showToast('🌐 Back online! Syncing your data...', 'success');
+    playNotificationSound();
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then(reg => {
+        if (reg.sync) reg.sync.register('sync-tasks');
+      });
+    }
+  });
+
+  window.addEventListener('offline', () => {
+    showToast('📶 You\'re offline. Tasks saved locally!', 'info');
+  });
+
+  /* Listen for sync message from SW */
+  navigator.serviceWorker?.addEventListener('message', e => {
+    if (e.data?.type === 'SYNC_TASKS') {
+      if (typeof loadTasks === 'function') loadTasks();
+    }
+  });
+}
+initOfflineSync();
+
+/* ── 7. NOTIFICATION BELL IN TOPBAR ── */
+function addNotificationBell() {
+  const bell = document.createElement('button');
+  bell.id = 'notifBell';
+  bell.innerHTML = '🔔';
+  bell.title = 'Enable task reminders';
+  bell.style.cssText = `
+    background:none; border:1px solid rgba(108,99,255,0.3);
+    color:#e8e8ff; border-radius:8px; width:36px; height:36px;
+    font-size:15px; cursor:pointer; transition:all 0.2s;
+    display:flex; align-items:center; justify-content:center;
+  `;
+  bell.addEventListener('click', async () => {
+    await requestNotificationPermission();
+    if (Notification.permission === 'granted') {
+      bell.style.background = 'rgba(67,233,123,0.15)';
+      bell.style.borderColor = '#43e97b';
+      bell.title = 'Reminders active ✓';
+      showToast('🔔 Task reminders are ON!', 'success');
+      playNotificationSound();
+      if (typeof tasks !== 'undefined') scheduleTaskReminders(tasks);
+    }
+  });
+
+  const topbarRight = document.querySelector('.topbar-right');
+  if (topbarRight) topbarRight.prepend(bell);
+}
+
+/* Init everything once app loads */
+const _origInitApp = window.initApp;
+window.initApp = function() {
+  if (_origInitApp) _origInitApp();
+  setTimeout(() => {
+    addNotificationBell();
+    initChatbot();
+  }, 500);
+};
