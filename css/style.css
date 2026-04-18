@@ -294,6 +294,49 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   font-family:'DM Sans',sans-serif;transition:all .2s;text-align:center}
 .pri-btn.active{border-color:var(--accent);background:rgba(108,99,255,.15);color:var(--text)}
 
+/* Time picker column — visible scrollbar */
+.time-col,
+.picker-col,
+.time-scroll-col {
+    overflow-y: scroll !important;
+    scrollbar-width: thin;
+    scrollbar-color: #6c63ff #1e1b4b;
+    scroll-snap-type: y mandatory;
+    height: 200px;
+}
+
+/* Webkit scrollbar (Chrome, Edge) */
+.time-col::-webkit-scrollbar,
+.picker-col::-webkit-scrollbar,
+.time-scroll-col::-webkit-scrollbar {
+    width: 6px;
+}
+
+.time-col::-webkit-scrollbar-track,
+.picker-col::-webkit-scrollbar-track,
+.time-scroll-col::-webkit-scrollbar-track {
+    background: #1e1b4b;
+    border-radius: 10px;
+}
+
+.time-col::-webkit-scrollbar-thumb,
+.picker-col::-webkit-scrollbar-thumb,
+.time-scroll-col::-webkit-scrollbar-thumb {
+    background: #6c63ff;
+    border-radius: 10px;
+}
+
+/* Each time item snaps into place */
+.time-col li,
+.time-col div,
+.picker-col li,
+.picker-col div,
+.time-scroll-col li,
+.time-scroll-col div {
+    scroll-snap-align: center;
+    cursor: pointer;
+}
+
 /* ===== EMPTY STATE ===== */
 .empty-state{text-align:center;padding:36px 20px}
 .empty-icon{font-size:38px;margin-bottom:10px;opacity:.5}
@@ -338,4 +381,285 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
   .form-row{grid-template-columns:1fr}
   .priority-row{flex-direction:column}
   .stats-row{grid-template-columns:1fr 1fr}
+}
+
+
+/* ═══════════════════════════════════════
+   3D & INTERACTIVE ENHANCEMENTS
+═══════════════════════════════════════ */
+
+/* Floating emoji mascot on dashboard */
+.mascot {
+    position: fixed;
+    bottom: 90px;
+    right: 24px;
+    font-size: 2.8rem;
+    animation: mascotFloat 3s ease-in-out infinite;
+    cursor: pointer;
+    z-index: 200;
+    filter: drop-shadow(0 8px 16px rgba(108,99,255,0.5));
+    transition: transform 0.2s;
+}
+.mascot:hover { transform: scale(1.3) rotate(-10deg); }
+@keyframes mascotFloat {
+    0%,100% { transform: translateY(0px) rotate(0deg); }
+    50%      { transform: translateY(-12px) rotate(5deg); }
+}
+
+/* 3D card tilt on task cards */
+.task-card, .stat-card, .card {
+    transform-style: preserve-3d;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    will-change: transform;
+}
+.task-card:hover, .stat-card:hover, .card:hover {
+    box-shadow: 0 20px 40px rgba(108,99,255,0.25);
+}
+
+/* Particle sparkle on buttons */
+.btn-primary, .btn-add, button[type="submit"] {
+    position: relative;
+    overflow: hidden;
+}
+.btn-primary::after, .btn-add::after, button[type="submit"]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.4s ease;
+}
+.btn-primary:hover::after, .btn-add:hover::after, button[type="submit"]:hover::after {
+    transform: translateX(0);
+}
+
+/* Animated gradient background on header/hero */
+.app-header, .dashboard-header, .page-header {
+    background: linear-gradient(270deg, #1e1b4b, #312e81, #4c1d95, #1e1b4b);
+    background-size: 600% 600%;
+    animation: gradientShift 8s ease infinite;
+}
+@keyframes gradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* Bouncy task completion checkmark */
+.task-check, input[type="checkbox"] {
+    transition: transform 0.3s cubic-bezier(0.68,-0.55,0.265,1.55);
+}
+.task-check:checked, input[type="checkbox"]:checked {
+    transform: scale(1.3);
+}
+
+/* Priority badge pulse */
+.priority-high   { animation: pulseBadge 2s ease-in-out infinite; }
+.priority-medium { animation: pulseBadge 3s ease-in-out infinite; }
+@keyframes pulseBadge {
+    0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+    50%     { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+
+/* Confetti burst on task complete — CSS only shimmer */
+.task-done, .completed {
+    background: linear-gradient(90deg,
+        rgba(108,99,255,0.08) 0%,
+        rgba(16,185,129,0.12) 50%,
+        rgba(108,99,255,0.08) 100%);
+    background-size: 200% 100%;
+    animation: shimmerDone 2s linear infinite;
+}
+@keyframes shimmerDone {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Smooth page section reveal */
+.section-reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.section-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Glowing stats numbers */
+.stat-number, .stat-value, .count {
+    background: linear-gradient(135deg, #818cf8, #c4b5fd);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 8px rgba(129,140,248,0.5));
+}
+
+/* Floating task count badge */
+.task-badge {
+    animation: badgeBounce 0.4s cubic-bezier(0.68,-0.55,0.265,1.55);
+}
+@keyframes badgeBounce {
+    0%   { transform: scale(0); }
+    100% { transform: scale(1); }
+}
+
+/* Fun empty state illustration */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    animation: fadeUp 0.5s ease;
+}
+.empty-state::before {
+    content: '📋✨';
+    display: block;
+    font-size: 3rem;
+    margin-bottom: 16px;
+    animation: mascotFloat 3s ease-in-out infinite;
+}
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ===== CUSTOM TIME PICKER ===== */
+.time-picker-wrap {
+  position: relative;
+}
+
+.time-picker-display {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--r3);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.2s;
+  user-select: none;
+}
+.time-picker-display:hover {
+  border-color: var(--accent);
+}
+
+.time-picker-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--r2);
+  z-index: 300;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+  overflow: hidden;
+  animation: dropIn 0.2s cubic-bezier(0.34,1.56,0.64,1);
+}
+.time-picker-dropdown.open {
+  display: block;
+}
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.time-picker-cols {
+  display: flex;
+  align-items: center;
+  height: 200px;
+  position: relative;
+  padding: 0 8px;
+}
+
+/* Center highlight band */
+.time-picker-cols::after {
+  content: '';
+  position: absolute;
+  left: 8px; right: 8px;
+  top: 50%; transform: translateY(-50%);
+  height: 38px;
+  background: rgba(108,99,255,0.15);
+  border: 1px solid rgba(108,99,255,0.35);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tp-col {
+  flex: 1;
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--bg2);
+  padding: 81px 0; /* top+bottom padding = (200-38)/2 */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Webkit scrollbar */
+.tp-col::-webkit-scrollbar {
+  width: 4px;
+}
+.tp-col::-webkit-scrollbar-track {
+  background: var(--bg2);
+  border-radius: 10px;
+}
+.tp-col::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 10px;
+}
+
+.tp-item {
+  scroll-snap-align: center;
+  text-align: center;
+  padding: 9px 4px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text3);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s, font-size 0.15s;
+  user-select: none;
+  position: relative;
+  z-index: 2;
+}
+.tp-item:hover {
+  color: var(--text);
+}
+.tp-item.selected {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.tp-sep {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent);
+  padding: 0 6px;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.tp-confirm {
+  text-align: center;
+  padding: 12px;
+  background: linear-gradient(135deg, var(--accent), #8b7cf8);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: opacity 0.2s;
+}
+.tp-confirm:hover {
+  opacity: 0.9;
 }
