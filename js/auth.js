@@ -1,21 +1,6 @@
 // ===== auth.js — Firebase Authentication =====
 // Supports: Google Sign-In + Email/Password Sign-Up/Sign-In
 
-
-// Handle redirect result when page loads back after Google sign-in
-auth.getRedirectResult()
-  .then(result => {
-    if (result && result.user) {
-      // User signed in via redirect — onAuthStateChanged will handle the rest
-      console.log('[Auth] Redirect sign-in successful:', result.user.email);
-    }
-  })
-  .catch(err => {
-    if (err.code !== 'auth/no-current-user') {
-      handleAuthError(err);
-    }
-  });
-
 let currentUser = null;
 let selectedPriority = 'high';
 
@@ -49,17 +34,17 @@ function setAuthLoading(on, msg) {
 
 // ---- GOOGLE SIGN-IN ----
 function signInWithGoogle() {
-  setAuthLoading(true, 'Redirecting to Google Sign-In...');
+  setAuthLoading(true, 'Opening Google Sign-In...');
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope('email');
   provider.addScope('profile');
-  // Use redirect instead of popup — works on all browsers and domains
-  auth.signInWithRedirect(provider)
+  auth.signInWithPopup(provider)
     .catch(err => {
       setAuthLoading(false);
       handleAuthError(err);
     });
 }
+
 // ---- EMAIL SIGN-IN ----
 function signInWithEmail() {
   const email    = document.getElementById('loginEmail').value.trim();
