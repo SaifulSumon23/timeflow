@@ -1,7 +1,7 @@
 import webpush from 'web-push';
 
 webpush.setVapidDetails(
-  'mailto:sisumon2318@gmail.com',
+  'mailto:beckham221b@gmail.com',
   process.env.VAPID_PUBLIC,
   process.env.VAPID_PRIVATE
 );
