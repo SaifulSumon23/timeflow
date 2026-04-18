@@ -411,12 +411,13 @@ const VAPID_PUB_KEY = 'BAqktYcGYjC4nzE9t8azPvTWLNGjDBulVe_Wwb5NoBABRYzwBjb01BEWs
 const NOTIFY_SECRET = 'timeflow2026';
 
 /* Convert VAPID key */
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64  = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
-  const rawData = window.atob(base64);
-  const arr     = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) arr[i] = rawData.charCodeAt(i);
+
+function urlBase64ToUint8Array(b64) {
+  const pad  = '='.repeat((4 - b64.length % 4) % 4);
+  const base = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw  = window.atob(base);
+  const arr  = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
   return arr;
 }
 
@@ -426,9 +427,9 @@ async function subscribeToPush() {
     return false;
   }
   try {
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      showToast('❌ Please allow notifications for task reminders', 'error');
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      showToast('❌ Please allow notifications', 'error');
       return false;
     }
 
@@ -442,24 +443,43 @@ async function subscribeToPush() {
     }
 
     const userId = currentUser?.uid || 'anonymous';
-    const res = await fetch(`${PUSH_SERVER}/api/subscribe`, {
+    await fetch(`${PUSH_SERVER}/api/subscribe`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ subscription: sub.toJSON(), userId })
     });
 
-    if (res.ok) {
-      localStorage.setItem('tf_push_subscribed', 'true');
-      localStorage.setItem('tf_user_id', userId);
-      showToast('🔔 Push notifications enabled!', 'success');
-      playNotificationSound();
-      return true;
-    }
-    return false;
+    localStorage.setItem('tf_push_subscribed', 'true');
+    localStorage.setItem('tf_user_id', userId);
+    localStorage.setItem('tf_push_endpoint', sub.endpoint);
+    return true;
+
   } catch(err) {
-    console.error('[Push] Error:', err);
-    showToast('❌ Notification error: ' + err.message, 'error');
+    console.error('[Push]', err);
+    showToast('❌ ' + err.message, 'error');
     return false;
+  }
+}
+
+/* Send ALL tasks to server for scheduling — called whenever tasks change */
+async function scheduleTaskReminders(taskList) {
+  const userId = localStorage.getItem('tf_user_id') || currentUser?.uid;
+  if (!userId || localStorage.getItem('tf_push_subscribed') !== 'true') return;
+
+  try {
+    const res = await fetch(`${PUSH_SERVER}/api/schedule-reminders`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        userId,
+        tasks:  taskList,
+        secret: NOTIFY_SECRET
+      })
+    });
+    const data = await res.json();
+    console.log(`[Reminders] Scheduled ${data.scheduled} reminders on server`);
+  } catch(err) {
+    console.warn('[Reminders] Could not schedule:', err.message);
   }
 }
 
@@ -467,48 +487,22 @@ async function requestNotificationPermission() {
   return subscribeToPush();
 }
 
-async function scheduleTaskReminders(taskList) {
-  const userId = localStorage.getItem('tf_user_id') || currentUser?.uid;
-  if (!userId || !localStorage.getItem('tf_push_subscribed')) return;
-
-  const now = Date.now();
-  for (const task of taskList) {
-    if (task.done || !task.time || !task.date) continue;
-    const taskDateTime = new Date(`${task.date}T${task.time}`);
-    if (isNaN(taskDateTime)) continue;
-
-    for (const mins of [18, 10]) {
-      const fireAt = taskDateTime.getTime() - mins * 60 * 1000;
-      const delay  = fireAt - now;
-      if (delay < 0) continue;
-
-      setTimeout(async () => {
-        try {
-          await fetch(`${PUSH_SERVER}/api/send-reminder`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
-              userId,
-              taskName:      task.name || task.title || 'Task',
-              minutesBefore: mins,
-              secret:        NOTIFY_SECRET
-            })
-          });
-        } catch(e) {
-          console.warn('[Push] Reminder failed:', e);
-        }
-      }, delay);
-    }
-  }
-}
-
 function initReminders() {
   navigator.serviceWorker?.ready.then(() => {
-    if (typeof tasks !== 'undefined') scheduleTaskReminders(tasks);
+    if (typeof tasks !== 'undefined' && tasks.length > 0) {
+      scheduleTaskReminders(tasks);
+    }
   });
 }
 
 setTimeout(initReminders, 2000);
+
+/* Re-schedule whenever tasks are loaded/changed */
+document.addEventListener('tasks-updated', () => {
+  if (localStorage.getItem('tf_push_subscribed') === 'true') {
+    scheduleTaskReminders(tasks);
+  }
+});
 
 /* ── 2. SOUND ENGINE ── */
 function createAudioContext() {
@@ -899,7 +893,7 @@ function addNotificationBell() {
   bell.id = 'notifBell';
   const isOn = localStorage.getItem('tf_push_subscribed') === 'true';
   bell.innerHTML = isOn ? '🔔' : '🔕';
-  bell.title     = isOn ? 'Notifications ON — click to test' : 'Enable task reminders';
+  bell.title = isOn ? '✓ Reminders ON — click to resync' : 'Enable task reminders';
   bell.style.cssText = `
     background:${isOn ? 'rgba(67,233,123,0.15)' : 'none'};
     border:1px solid ${isOn ? '#43e97b' : 'rgba(108,99,255,0.3)'};
@@ -909,35 +903,36 @@ function addNotificationBell() {
   `;
 
   bell.addEventListener('click', async () => {
+    showToast('⏳ Setting up notifications...', 'info');
     const ok = await subscribeToPush();
-    if (ok) {
-      bell.innerHTML = '🔔';
-      bell.style.background   = 'rgba(67,233,123,0.15)';
-      bell.style.borderColor  = '#43e97b';
-      bell.title = 'Notifications ON — click to send test';
-      if (typeof tasks !== 'undefined') scheduleTaskReminders(tasks);
+    if (!ok) return;
 
-      /* Send test notification after 5s so user can see it works */
-      showToast('⏳ Test notification coming in 5 seconds...', 'info');
-      setTimeout(async () => {
-        try {
-          const userId = localStorage.getItem('tf_user_id');
-          await fetch(`${PUSH_SERVER}/api/send-reminder`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
-              userId,
-              taskName:      'TimeFlow is working!',
-              minutesBefore: 0,
-              secret:        NOTIFY_SECRET
-            })
-          });
-          showToast('🔔 Check your notification bar!', 'success');
-        } catch(e) {
-          showToast('⚠️ Could not reach server. Check Vercel deployment.', 'error');
-        }
-      }, 5000);
+    bell.innerHTML = '🔔';
+    bell.style.background  = 'rgba(67,233,123,0.15)';
+    bell.style.borderColor = '#43e97b';
+    bell.title = '✓ Reminders ON';
+
+    // Schedule all current tasks on server
+    if (typeof tasks !== 'undefined') {
+      await scheduleTaskReminders(tasks);
+      showToast(`🔔 Reminders scheduled for ${tasks.filter(t=>!t.done&&t.time).length} tasks!`, 'success');
     }
+
+    // Send test notification in 8 seconds
+    showToast('⏳ Test notification in 8 seconds — lock your screen!', 'info');
+    setTimeout(async () => {
+      try {
+        const userId = localStorage.getItem('tf_user_id');
+        await fetch(`${PUSH_SERVER}/api/send-reminder`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ secret: NOTIFY_SECRET })
+        });
+        showToast('🔔 Check your notification bar!', 'success');
+      } catch(e) {
+        showToast('⚠️ Server error — check Vercel logs', 'error');
+      }
+    }, 8000);
   });
 
   const topbarRight = document.querySelector('.topbar-right');
