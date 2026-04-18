@@ -1,5 +1,5 @@
-/* ===== TimeFlow Service Worker ===== */
-const CACHE_NAME = 'timeflow-v3';
+/* ===== TimeFlow Service Worker — Notification Fix ===== */
+const CACHE_NAME = 'timeflow-v4';
 const ASSETS = [
   '/', '/index.html', '/css/style.css',
   '/js/firebase-config.js', '/js/auth.js', '/js/storage.js',
@@ -7,15 +7,11 @@ const ASSETS = [
   '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'
 ];
 
-/* Install — cache all assets */
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
-  );
+self.addEventListener('install',  e => {
+  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
   self.skipWaiting();
 });
 
-/* Activate — clean old caches */
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -25,36 +21,12 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-/* Fetch — cache first, network fallback */
 self.addEventListener('fetch', e => {
-  // Skip Firebase/API requests — always go to network
   if (e.request.url.includes('firebase') ||
       e.request.url.includes('googleapis') ||
-      e.request.url.includes('gstatic')) {
-    return;
-  }
+      e.request.url.includes('gstatic')) return;
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
-  );
-});
-
-/* Push notification */
-self.addEventListener('push', e => {
-  const data = e.data ? e.data.json() : {};
-  e.waitUntil(
-    self.registration.showNotification(data.title || 'TimeFlow Reminder', {
-      body:    data.body  || 'You have an upcoming task!',
-      icon:    '/icons/icon-192.png',
-      badge:   '/icons/icon-192.png',
-      tag:     data.tag   || 'timeflow-reminder',
-      data:    { url: '/' },
-      actions: [
-        { action: 'open',    title: '📋 Open App' },
-        { action: 'dismiss', title: '✕ Dismiss'   }
-      ],
-      vibrate: [200, 100, 200],
-      requireInteraction: true
-    })
   );
 });
 
@@ -63,43 +35,95 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   if (e.action === 'dismiss') return;
   e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-      const existing = cs.find(c => c.url.includes(self.location.origin));
-      if (existing) return existing.focus();
-      return clients.openWindow('/');
+    clients.matchAll({ type:'window', includeUncontrolled:true }).then(cs => {
+      const ex = cs.find(c => c.url.includes(self.location.origin));
+      return ex ? ex.focus() : clients.openWindow('/');
     })
   );
 });
 
-/* Background sync — fires when back online */
+/* Background sync */
 self.addEventListener('sync', e => {
   if (e.tag === 'sync-tasks') {
-    e.waitUntil(syncTasksToFirebase());
+    e.waitUntil(
+      clients.matchAll().then(cs => cs.forEach(c => c.postMessage({ type:'SYNC_TASKS' })))
+    );
   }
 });
 
-async function syncTasksToFirebase() {
-  const allClients = await clients.matchAll();
-  allClients.forEach(client => client.postMessage({ type: 'SYNC_TASKS' }));
+/* ── NOTIFICATION ALARM STORE ──
+   Store alarms in IndexedDB so they survive SW idle/restart */
+function openAlarmDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('timeflow-alarms', 1);
+    req.onupgradeneeded = e => {
+      e.target.result.createObjectStore('alarms', { keyPath: 'id' });
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror   = e => reject(e);
+  });
 }
 
-/* Task reminder alarm — triggered by main thread */
-self.addEventListener('message', e => {
-  if (e.data && e.data.type === 'SCHEDULE_REMINDER') {
-    const { taskName, minutesBefore, delayMs } = e.data;
-    setTimeout(() => {
-      self.registration.showNotification('⏰ Task Reminder — TimeFlow', {
-        body:    `"${taskName}" starts in ${minutesBefore} minutes!`,
+async function saveAlarm(alarm) {
+  const db    = await openAlarmDB();
+  const tx    = db.transaction('alarms', 'readwrite');
+  tx.objectStore('alarms').put(alarm);
+}
+
+async function getAllAlarms() {
+  const db = await openAlarmDB();
+  return new Promise(resolve => {
+    const tx  = db.transaction('alarms', 'readonly');
+    const req = tx.objectStore('alarms').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+  });
+}
+
+async function deleteAlarm(id) {
+  const db = await openAlarmDB();
+  const tx = db.transaction('alarms', 'readwrite');
+  tx.objectStore('alarms').delete(id);
+}
+
+/* Check alarms every 60 seconds using a periodic check */
+async function checkAlarms() {
+  const alarms = await getAllAlarms();
+  const now    = Date.now();
+  for (const alarm of alarms) {
+    if (now >= alarm.fireAt) {
+      await self.registration.showNotification('⏰ TimeFlow Reminder', {
+        body:    `"${alarm.taskName}" starts in ${alarm.minutesBefore} minutes!`,
         icon:    '/icons/icon-192.png',
         badge:   '/icons/icon-192.png',
-        tag:     `reminder-${taskName}-${minutesBefore}`,
-        vibrate: [300, 100, 300, 100, 300],
+        tag:     alarm.id,
+        vibrate: [300,100,300,100,300],
         requireInteraction: true,
+        data:    { url: '/' },
         actions: [
-          { action: 'open',    title: '📋 View Task' },
-          { action: 'dismiss', title: '✕ Dismiss'    }
+          { action:'open',    title:'📋 View Task' },
+          { action:'dismiss', title:'✕ Dismiss'    }
         ]
       });
-    }, delayMs);
+      await deleteAlarm(alarm.id);
+    }
+  }
+}
+
+/* Heartbeat — wake SW every minute to check alarms */
+self.addEventListener('message', async e => {
+  if (e.data?.type === 'HEARTBEAT') {
+    await checkAlarms();
+  }
+
+  if (e.data?.type === 'SCHEDULE_REMINDER') {
+    const { taskName, minutesBefore, fireAt } = e.data;
+    const id = `${taskName}-${minutesBefore}-${fireAt}`;
+    await saveAlarm({ id, taskName, minutesBefore, fireAt });
+  }
+
+  if (e.data?.type === 'CLEAR_REMINDERS') {
+    const db    = await openAlarmDB();
+    const tx    = db.transaction('alarms', 'readwrite');
+    tx.objectStore('alarms').clear();
   }
 });
