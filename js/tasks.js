@@ -38,6 +38,11 @@ function toggleTask(id) {
   const t = tasks.find(t => t.id === id);
   if (!t) return;
   updateTask(id, { done: !t.done });
+  
+  if (!t.done) {
+    launchConfetti(); // ← fires confetti when task is marked complete
+  }
+  
   showToast(t.done ? 'Task reopened' : '🎉 Task completed!', t.done ? 'info' : 'success');
 }
 
