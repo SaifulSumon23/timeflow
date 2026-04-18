@@ -287,21 +287,36 @@
 <div class="form-group">
   <label class="form-label">Start Time</label>
   <div class="time-picker-wrap" id="timePickerWrap">
-    <div class="time-picker-display" id="timePickerDisplay" onclick="toggleTimePicker()">
-      <span id="timeDisplayText">--:--</span>
-      <span style="color:var(--text3);font-size:12px;">🕐</span>
+
+    <!-- Manual type row -->
+    <div class="tp-manual-row">
+      <input
+        class="tp-manual-input"
+        id="taskTime"
+        type="text"
+        placeholder="HH:MM"
+        maxlength="5"
+        autocomplete="off"
+        oninput="onManualTimeInput(this)"
+      />
+      <button class="tp-scroll-toggle" onclick="toggleTimePicker()" title="Pick from scroll">🕐</button>
     </div>
+
+    <!-- Scroll picker dropdown -->
     <div class="time-picker-dropdown" id="timePickerDropdown">
+      <div class="tp-header">
+        <span>Scroll to pick time</span>
+        <span id="tpLiveTime" style="color:var(--accent);font-weight:700;">--:--</span>
+      </div>
       <div class="time-picker-cols">
         <div class="tp-col" id="hourCol"></div>
         <div class="tp-sep">:</div>
         <div class="tp-col" id="minCol"></div>
       </div>
-      <div class="tp-confirm" onclick="confirmTime()">✓ Set Time</div>
+      <div class="tp-confirm" onclick="confirmTime()">✓ Confirm Time</div>
     </div>
+
   </div>
-  <!-- hidden input to hold actual value -->
-  <input type="hidden" id="taskTime"/>
 </div>
     </div>
     <div class="form-row">
