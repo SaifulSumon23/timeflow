@@ -410,30 +410,65 @@ async function requestNotificationPermission() {
   }
 }
 
-function scheduleTaskReminders(taskList) {
+/* ── HEARTBEAT — keeps SW alive to check alarms ── */
+function startHeartbeat() {
   if (!navigator.serviceWorker.controller) return;
-  if (Notification.permission !== 'granted') return;
+  setInterval(() => {
+    navigator.serviceWorker.controller?.postMessage({ type: 'HEARTBEAT' });
+  }, 55000); // every 55 seconds
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  const perm = await Notification.requestPermission();
+  return perm === 'granted';
+}
+
+async function scheduleTaskReminders(taskList) {
+  const granted = await requestNotificationPermission();
+  if (!granted) return;
+
+  const sw = navigator.serviceWorker.controller;
+  if (!sw) {
+    // SW not ready yet — retry in 2s
+    setTimeout(() => scheduleTaskReminders(taskList), 2000);
+    return;
+  }
+
+  // Clear old reminders first
+  sw.postMessage({ type: 'CLEAR_REMINDERS' });
 
   taskList.forEach(task => {
     if (task.done || !task.time || !task.date) return;
 
     const taskDateTime = new Date(`${task.date}T${task.time}`);
+    if (isNaN(taskDateTime)) return;
+
     const now = Date.now();
 
     [18, 10].forEach(mins => {
       const fireAt = taskDateTime.getTime() - mins * 60 * 1000;
-      const delay  = fireAt - now;
-      if (delay < 0) return; // already passed
+      if (fireAt <= now) return; // already passed
 
-      navigator.serviceWorker.controller.postMessage({
-        type: 'SCHEDULE_REMINDER',
-        taskName: task.name || task.title || 'Task',
+      sw.postMessage({
+        type:          'SCHEDULE_REMINDER',
+        taskName:      task.name || task.title || 'Task',
         minutesBefore: mins,
-        delayMs: delay
+        fireAt
       });
     });
   });
 }
+
+function initReminders() {
+  navigator.serviceWorker?.ready.then(() => {
+    startHeartbeat();
+    if (typeof tasks !== 'undefined') scheduleTaskReminders(tasks);
+  });
+}
+
+setTimeout(initReminders, 2000);
 
 /* Call this after tasks load */
 function initReminders() {
@@ -859,4 +894,281 @@ window.initApp = function() {
     addNotificationBell();
     initChatbot();
   }, 500);
+};
+
+/* ═══════════════════════════
+   GAMIFICATION SYSTEM
+═══════════════════════════ */
+
+const GAME = {
+  xp:        parseInt(localStorage.getItem('tf_xp')        || '0'),
+  streak:    parseInt(localStorage.getItem('tf_streak')    || '0'),
+  lastDate:       localStorage.getItem('tf_lastDate')      || '',
+  badges:    JSON.parse(localStorage.getItem('tf_badges')  || '[]'),
+  totalDone: parseInt(localStorage.getItem('tf_totalDone') || '0'),
+};
+
+const LEVELS = [
+  { min:0,    name:'Beginner',    icon:'🌱', color:'#43e97b' },
+  { min:100,  name:'Planner',     icon:'📋', color:'#6c63ff' },
+  { min:300,  name:'Achiever',    icon:'⚡', color:'#f6c90e' },
+  { min:600,  name:'Optimizer',   icon:'🚀', color:'#ff6584' },
+  { min:1000, name:'Master',      icon:'🏆', color:'#ff6584' },
+  { min:2000, name:'Legend',      icon:'👑', color:'#f6c90e' },
+];
+
+const BADGES_DEF = [
+  { id:'first_task',  name:'First Step',     icon:'🎯', desc:'Complete your first task',         check: g => g.totalDone >= 1   },
+  { id:'five_tasks',  name:'On a Roll',      icon:'🔥', desc:'Complete 5 tasks',                 check: g => g.totalDone >= 5   },
+  { id:'ten_tasks',   name:'Task Ninja',     icon:'⚡', desc:'Complete 10 tasks',                check: g => g.totalDone >= 10  },
+  { id:'fifty_tasks', name:'Productivity God',icon:'👑',desc:'Complete 50 tasks',               check: g => g.totalDone >= 50  },
+  { id:'streak3',     name:'3-Day Streak',   icon:'🔥', desc:'Complete tasks 3 days in a row',  check: g => g.streak >= 3      },
+  { id:'streak7',     name:'Week Warrior',   icon:'⚔️', desc:'Complete tasks 7 days in a row',  check: g => g.streak >= 7      },
+  { id:'early_bird',  name:'Early Bird',     icon:'🌅', desc:'Complete a task before 9am',      check: () => new Date().getHours() < 9 },
+  { id:'night_owl',   name:'Night Owl',      icon:'🦉', desc:'Complete a task after 10pm',      check: () => new Date().getHours() >= 22 },
+];
+
+function getLevel() {
+  for (let i = LEVELS.length - 1; i >= 0; i--) {
+    if (GAME.xp >= LEVELS[i].min) return LEVELS[i];
+  }
+  return LEVELS[0];
+}
+
+function getNextLevel() {
+  for (let i = 0; i < LEVELS.length; i++) {
+    if (GAME.xp < LEVELS[i].min) return LEVELS[i];
+  }
+  return null;
+}
+
+function saveGame() {
+  localStorage.setItem('tf_xp',        GAME.xp);
+  localStorage.setItem('tf_streak',    GAME.streak);
+  localStorage.setItem('tf_lastDate',  GAME.lastDate);
+  localStorage.setItem('tf_badges',    JSON.stringify(GAME.badges));
+  localStorage.setItem('tf_totalDone', GAME.totalDone);
+}
+
+function addXP(amount, reason) {
+  GAME.xp += amount;
+  saveGame();
+  showXPPopup(amount, reason);
+  updateStreakAndBadges();
+  updateGameUI();
+}
+
+function showXPPopup(amount, reason) {
+  const el = document.createElement('div');
+  el.style.cssText = `
+    position:fixed; top:80px; right:24px; z-index:500;
+    background:linear-gradient(135deg,#6c63ff,#ff6584);
+    color:#fff; padding:12px 20px; border-radius:14px;
+    font-weight:700; font-size:14px;
+    box-shadow:0 8px 24px rgba(108,99,255,0.5);
+    animation:xpPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    pointer-events:none;
+  `;
+  el.innerHTML = `+${amount} XP ⚡ <span style="font-size:11px;opacity:0.85;">${reason}</span>`;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'all 0.4s ease';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(-20px)';
+    setTimeout(() => el.remove(), 400);
+  }, 1800);
+}
+
+function updateStreakAndBadges() {
+  const today = new Date().toDateString();
+  if (GAME.lastDate !== today) {
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    GAME.streak    = (GAME.lastDate === yesterday) ? GAME.streak + 1 : 1;
+    GAME.lastDate  = today;
+    saveGame();
+  }
+
+  // Check for new badges
+  BADGES_DEF.forEach(b => {
+    if (!GAME.badges.includes(b.id) && b.check(GAME)) {
+      GAME.badges.push(b.id);
+      saveGame();
+      setTimeout(() => showBadgeUnlock(b), 1000);
+    }
+  });
+}
+
+function showBadgeUnlock(badge) {
+  const el = document.createElement('div');
+  el.style.cssText = `
+    position:fixed; bottom:100px; left:50%; transform:translateX(-50%);
+    background:#0e0e2a; border:2px solid #f6c90e;
+    border-radius:20px; padding:20px 28px; z-index:500;
+    text-align:center; box-shadow:0 20px 50px rgba(0,0,0,0.7);
+    animation:xpPop 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    min-width:240px;
+  `;
+  el.innerHTML = `
+    <div style="font-size:2.5rem;margin-bottom:8px;">${badge.icon}</div>
+    <div style="color:#f6c90e;font-weight:800;font-size:13px;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;">Badge Unlocked!</div>
+    <div style="color:#e8e8ff;font-weight:700;font-size:16px;margin-bottom:4px;">${badge.name}</div>
+    <div style="color:#9090b8;font-size:12px;">${badge.desc}</div>
+  `;
+  document.body.appendChild(el);
+  playNotificationSound();
+  setTimeout(() => {
+    el.style.transition = 'all 0.4s ease';
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(20px)';
+    setTimeout(() => el.remove(), 400);
+  }, 3500);
+}
+
+function buildGamePanel() {
+  const panel = document.createElement('div');
+  panel.id = 'gamePanel';
+  panel.style.cssText = `
+    position:fixed; top:70px; right:16px; z-index:300;
+    background:#0e0e2a; border:1px solid rgba(108,99,255,0.3);
+    border-radius:16px; padding:16px; min-width:200px;
+    box-shadow:0 16px 40px rgba(0,0,0,0.6);
+    display:none; flex-direction:column; gap:12px;
+    animation:dropIn 0.3s ease;
+  `;
+  document.body.appendChild(panel);
+  updateGameUI();
+}
+
+function updateGameUI() {
+  const panel = document.getElementById('gamePanel');
+  if (!panel) return;
+  const lvl  = getLevel();
+  const next = getNextLevel();
+  const pct  = next ? Math.round(((GAME.xp - lvl.min) / (next.min - lvl.min)) * 100) : 100;
+
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:28px;">${lvl.icon}</span>
+      <div>
+        <div style="font-weight:800;font-size:14px;color:${lvl.color};">${lvl.name}</div>
+        <div style="font-size:11px;color:#9090b8;">${GAME.xp} XP total</div>
+      </div>
+    </div>
+
+    <!-- XP Progress bar -->
+    <div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#9090b8;margin-bottom:5px;">
+        <span>${lvl.name}</span>
+        <span>${next ? next.name : 'MAX'}</span>
+      </div>
+      <div style="background:#1c1c3a;border-radius:999px;height:8px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:linear-gradient(to right,#6c63ff,#ff6584);border-radius:999px;transition:width 0.5s ease;"></div>
+      </div>
+      <div style="text-align:right;font-size:10px;color:#6c63ff;margin-top:3px;">${pct}%${next ? ` → ${next.min - GAME.xp} XP to go` : ' Max level!'}</div>
+    </div>
+
+    <!-- Streak -->
+    <div style="display:flex;align-items:center;gap:8px;background:rgba(246,201,14,0.08);
+      border:1px solid rgba(246,201,14,0.2);border-radius:10px;padding:8px 12px;">
+      <span style="font-size:18px;">🔥</span>
+      <div>
+        <div style="font-weight:700;font-size:13px;color:#f6c90e;">${GAME.streak} Day Streak</div>
+        <div style="font-size:10px;color:#9090b8;">Keep it going!</div>
+      </div>
+    </div>
+
+    <!-- Badges -->
+    <div>
+      <div style="font-size:10px;color:#9090b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Badges (${GAME.badges.length}/${BADGES_DEF.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;">
+        ${BADGES_DEF.map(b => `
+          <span title="${b.name}: ${b.desc}" style="font-size:18px;opacity:${GAME.badges.includes(b.id) ? '1' : '0.2'};
+            cursor:default;filter:${GAME.badges.includes(b.id) ? 'none' : 'grayscale(1)'};">
+            ${b.icon}
+          </span>`).join('')}
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div style="border-top:1px solid rgba(108,99,255,0.15);padding-top:10px;font-size:12px;color:#9090b8;">
+      ✅ ${GAME.totalDone} tasks completed
+    </div>
+  `;
+}
+
+function toggleGamePanel() {
+  const p = document.getElementById('gamePanel');
+  if (!p) return;
+  p.style.display = p.style.display === 'flex' ? 'none' : 'flex';
+}
+
+function addGameButton() {
+  const btn = document.createElement('button');
+  btn.id = 'gameBtn';
+  const lvl = getLevel();
+  btn.innerHTML = `${lvl.icon} ${GAME.xp} XP`;
+  btn.title = 'Your progress & badges';
+  btn.style.cssText = `
+    background:linear-gradient(135deg,rgba(108,99,255,0.2),rgba(255,101,132,0.1));
+    border:1px solid rgba(108,99,255,0.35);
+    color:#e8e8ff; border-radius:8px; padding:6px 12px;
+    font-size:12px; font-weight:700; cursor:pointer;
+    font-family:'DM Sans',sans-serif; transition:all 0.2s;
+    display:flex; align-items:center; gap:5px;
+  `;
+  btn.addEventListener('mouseenter', () => btn.style.borderColor = '#6c63ff');
+  btn.addEventListener('mouseleave', () => btn.style.borderColor = 'rgba(108,99,255,0.35)');
+  btn.addEventListener('click', toggleGamePanel);
+
+  const topbarRight = document.querySelector('.topbar-right');
+  if (topbarRight) topbarRight.prepend(btn);
+}
+
+/* Hook into task completion */
+const _origToggle = window.toggleTask;
+window.toggleTask = function(id) {
+  const t = (typeof tasks !== 'undefined') ? tasks.find(x => x.id === id) : null;
+  const wasNotDone = t && !t.done;
+
+  if (_origToggle) _origToggle(id);
+
+  if (wasNotDone) {
+    GAME.totalDone++;
+    saveGame();
+
+    // XP based on priority
+    const xpMap = { high: 30, med: 20, low: 10 };
+    const xp    = xpMap[t?.priority] || 15;
+    const label = t?.priority === 'high' ? '🔴 High priority!' :
+                  t?.priority === 'med'  ? '🟡 Medium task'    : '🟢 Task done';
+    addXP(xp, label);
+
+    // Update game button
+    const btn = document.getElementById('gameBtn');
+    const lvl = getLevel();
+    if (btn) btn.innerHTML = `${lvl.icon} ${GAME.xp} XP`;
+
+    playClapSound();
+    launchConfetti();
+  }
+};
+
+/* Add XP CSS animation */
+const xpStyle = document.createElement('style');
+xpStyle.textContent = `
+@keyframes xpPop {
+  from { opacity:0; transform:scale(0.6) translateY(10px); }
+  to   { opacity:1; transform:scale(1) translateY(0); }
+}`;
+document.head.appendChild(xpStyle);
+
+/* Init gamification */
+const _origInit2 = window.initApp;
+window.initApp = function() {
+  if (_origInit2) _origInit2();
+  setTimeout(() => {
+    addGameButton();
+    buildGamePanel();
+    updateStreakAndBadges();
+  }, 600);
 };
