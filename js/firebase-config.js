@@ -1,7 +1,7 @@
 // firebase-config.js
 const firebaseConfig = {
   apiKey: "AIzaSyDhZe_u6ZRUqgpjDELfrGN-tGZiE-FlTCU",
-  authDomain: "timeflow-opal.vercel.app",
+  authDomain: "timeflow-99313.firebaseapp.com",
   projectId: "timeflow-99313",
   storageBucket: "timeflow-99313.firebasestorage.app",
   messagingSenderId: "342513941021",
