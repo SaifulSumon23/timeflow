@@ -1,32 +1,24 @@
 {
   "name": "TimeFlow — Smart Planner",
   "short_name": "TimeFlow",
-  "description": "AI-powered time management and smart daily planner",
+  "description": "AI-powered smart time management planner",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#07071a",
-  "theme_color": "#07071a",
+  "theme_color": "#6c63ff",
   "orientation": "portrait-primary",
-  "scope": "/",
-  "lang": "en",
   "icons": [
-    { "src": "icons/icon-72.png",  "sizes": "72x72",   "type": "image/png", "purpose": "any maskable" },
-    { "src": "icons/icon-96.png",  "sizes": "96x96",   "type": "image/png", "purpose": "any maskable" },
-    { "src": "icons/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
+  "categories": ["productivity", "utilities"],
   "shortcuts": [
     {
-      "name": "Add Task", "short_name": "Add",
+      "name": "Add Task",
+      "short_name": "Add",
+      "description": "Quickly add a new task",
       "url": "/?action=add",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Today", "short_name": "Today",
-      "url": "/?page=today",
-      "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
