@@ -218,120 +218,161 @@ function buildTimePicker() {
   hourCol.innerHTML = '';
   minCol.innerHTML  = '';
 
-  // Build hours 00–23
   for (let h = 0; h < 24; h++) {
     const el = document.createElement('div');
-    el.className = 'tp-item';
+    el.className   = 'tp-item';
     el.textContent = String(h).padStart(2, '0');
     el.dataset.val = h;
-    el.addEventListener('click', () => selectHour(h, el));
+    el.addEventListener('click', () => {
+      selectedHour = h;
+      scrollToItem(el, hourCol);
+      highlightCenter(hourCol);
+      syncManualInput();
+    });
     hourCol.appendChild(el);
   }
 
-  // Build minutes 00–59
   for (let m = 0; m < 60; m++) {
     const el = document.createElement('div');
-    el.className = 'tp-item';
+    el.className   = 'tp-item';
     el.textContent = String(m).padStart(2, '0');
     el.dataset.val = m;
-    el.addEventListener('click', () => selectMin(m, el));
+    el.addEventListener('click', () => {
+      selectedMin = m;
+      scrollToItem(el, minCol);
+      highlightCenter(minCol);
+      syncManualInput();
+    });
     minCol.appendChild(el);
   }
 
-  // Highlight on scroll
   [hourCol, minCol].forEach(col => {
-    col.addEventListener('scroll', () => highlightCenter(col));
+    col.addEventListener('scroll', () => {
+      highlightCenter(col);
+      syncManualInput();
+    });
   });
 }
 
 function highlightCenter(col) {
-  const items    = col.querySelectorAll('.tp-item');
-  const center   = col.scrollTop + col.clientHeight / 2;
-  let   closest  = null;
-  let   minDist  = Infinity;
+  const items  = col.querySelectorAll('.tp-item');
+  const center = col.scrollTop + col.clientHeight / 2;
+  let closest = null, minDist = Infinity;
 
   items.forEach(item => {
-    const itemCenter = item.offsetTop + item.clientHeight / 2;
-    const dist = Math.abs(center - itemCenter);
-    if (dist < minDist) { minDist = dist; closest = item; }
+    const dist = Math.abs((item.offsetTop + item.clientHeight / 2) - center);
     item.classList.remove('selected');
+    if (dist < minDist) { minDist = dist; closest = item; }
   });
 
   if (closest) {
     closest.classList.add('selected');
-    // update selected values silently
     const val = parseInt(closest.dataset.val);
     if (col.id === 'hourCol') selectedHour = val;
     else                      selectedMin  = val;
-    updateDisplay();
+  }
+
+  // Update live display in header
+  const live = document.getElementById('tpLiveTime');
+  if (live) {
+    const h = selectedHour !== null ? String(selectedHour).padStart(2,'0') : '--';
+    const m = selectedMin  !== null ? String(selectedMin).padStart(2,'0')  : '--';
+    live.textContent = `${h}:${m}`;
   }
 }
 
-function selectHour(h, el) {
-  selectedHour = h;
-  scrollToItem(el, document.getElementById('hourCol'));
-  updateDisplay();
-}
-
-function selectMin(m, el) {
-  selectedMin = m;
-  scrollToItem(el, document.getElementById('minCol'));
-  updateDisplay();
-}
-
 function scrollToItem(el, col) {
-  const targetScroll = el.offsetTop - col.clientHeight / 2 + el.clientHeight / 2;
-  col.scrollTo({ top: targetScroll, behavior: 'smooth' });
+  const target = el.offsetTop - col.clientHeight / 2 + el.clientHeight / 2;
+  col.scrollTo({ top: target, behavior: 'smooth' });
 }
 
-function updateDisplay() {
-  const h = selectedHour !== null ? String(selectedHour).padStart(2,'0') : '--';
-  const m = selectedMin  !== null ? String(selectedMin).padStart(2,'0')  : '--';
-  const txt = document.getElementById('timeDisplayText');
-  if (txt) txt.textContent = `${h}:${m}`;
+function syncManualInput() {
+  const input = document.getElementById('taskTime');
+  if (!input) return;
+  if (selectedHour !== null && selectedMin !== null) {
+    input.value = `${String(selectedHour).padStart(2,'0')}:${String(selectedMin).padStart(2,'0')}`;
+  }
 }
 
 function toggleTimePicker() {
   const dd = document.getElementById('timePickerDropdown');
   if (!dd) return;
-  const isOpen = dd.classList.contains('open');
-  if (isOpen) {
+
+  if (dd.classList.contains('open')) {
     dd.classList.remove('open');
-  } else {
-    buildTimePicker();
-    dd.classList.add('open');
-
-    // Scroll to current time by default
-    const now  = new Date();
-    const hour = selectedHour !== null ? selectedHour : now.getHours();
-    const min  = selectedMin  !== null ? selectedMin  : Math.floor(now.getMinutes() / 5) * 5;
-
-    setTimeout(() => {
-      const hourCol  = document.getElementById('hourCol');
-      const minCol   = document.getElementById('minCol');
-      const hourItem = hourCol.querySelectorAll('.tp-item')[hour];
-      const minItem  = minCol.querySelectorAll('.tp-item')[min];
-      if (hourItem) scrollToItem(hourItem, hourCol);
-      if (minItem)  scrollToItem(minItem, minCol);
-      selectedHour = hour;
-      selectedMin  = min;
-      updateDisplay();
-    }, 50);
+    return;
   }
+
+  buildTimePicker();
+  dd.classList.add('open');
+
+  // Read from manual input if already typed
+  const input = document.getElementById('taskTime');
+  let hour = new Date().getHours();
+  let min  = Math.floor(new Date().getMinutes() / 5) * 5;
+
+  if (input && input.value && /^\d{1,2}:\d{2}$/.test(input.value)) {
+    const parts = input.value.split(':');
+    const h = parseInt(parts[0]);
+    const m = parseInt(parts[1]);
+    if (h >= 0 && h <= 23) hour = h;
+    if (m >= 0 && m <= 59) min  = m;
+  }
+
+  selectedHour = hour;
+  selectedMin  = min;
+
+  setTimeout(() => {
+    const hourCol  = document.getElementById('hourCol');
+    const minCol   = document.getElementById('minCol');
+    const hourItem = hourCol.querySelectorAll('.tp-item')[hour];
+    const minItem  = minCol.querySelectorAll('.tp-item')[min];
+    if (hourItem) scrollToItem(hourItem, hourCol);
+    if (minItem)  scrollToItem(minItem, minCol);
+    setTimeout(() => {
+      highlightCenter(hourCol);
+      highlightCenter(minCol);
+    }, 350);
+  }, 60);
 }
 
 function confirmTime() {
   const dd = document.getElementById('timePickerDropdown');
   if (dd) dd.classList.remove('open');
+  syncManualInput();
+}
 
-  if (selectedHour !== null && selectedMin !== null) {
-    const val = `${String(selectedHour).padStart(2,'0')}:${String(selectedMin).padStart(2,'0')}`;
-    document.getElementById('taskTime').value = val;
-    updateDisplay();
+/* Manual typing handler */
+function onManualTimeInput(input) {
+  let val = input.value.replace(/[^0-9]/g, '');
+
+  // Auto-insert colon after 2 digits
+  if (val.length >= 2) {
+    val = val.substring(0,2) + ':' + val.substring(2,4);
+  }
+  input.value = val;
+
+  // Validate and highlight
+  if (/^\d{2}:\d{2}$/.test(val)) {
+    const h = parseInt(val.split(':')[0]);
+    const m = parseInt(val.split(':')[1]);
+
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      input.style.borderColor = '#43e97b'; // green = valid
+      input.style.boxShadow   = '0 0 0 3px rgba(67,233,123,0.15)';
+      selectedHour = h;
+      selectedMin  = m;
+    } else {
+      input.style.borderColor = '#ff6584'; // red = invalid
+      input.style.boxShadow   = '0 0 0 3px rgba(255,101,132,0.15)';
+    }
+  } else {
+    input.style.borderColor = '';
+    input.style.boxShadow   = '';
   }
 }
 
-// Close picker when clicking outside
+/* Close on outside click */
 document.addEventListener('click', e => {
   const wrap = document.getElementById('timePickerWrap');
   if (wrap && !wrap.contains(e.target)) {
@@ -340,14 +381,18 @@ document.addEventListener('click', e => {
   }
 });
 
-// Reset picker when modal closes
-const origCloseModal = window.closeModal;
+/* Reset on modal close */
+const _origClose = window.closeModal;
 window.closeModal = function() {
   selectedHour = null;
   selectedMin  = null;
-  const txt = document.getElementById('timeDisplayText');
-  if (txt) txt.textContent = '--:--';
+  const input = document.getElementById('taskTime');
+  if (input) {
+    input.value      = '';
+    input.style.borderColor = '';
+    input.style.boxShadow   = '';
+  }
   const dd = document.getElementById('timePickerDropdown');
   if (dd) dd.classList.remove('open');
-  if (origCloseModal) origCloseModal();
+  if (_origClose) _origClose();
 };
