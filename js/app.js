@@ -401,82 +401,114 @@ window.closeModal = function() {
    NOTIFICATIONS, SOUNDS, PARTICLES, CHATBOT
 ═══════════════════════════════════════════ */
 
-/* ── 1. NOTIFICATION PERMISSION & REMINDERS ── */
-async function requestNotificationPermission() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') {
-    const perm = await Notification.requestPermission();
-    if (perm === 'granted') showToast('🔔 Notifications enabled!', 'success');
+/* ═══════════════════════════════════════
+   WEB PUSH NOTIFICATION SYSTEM
+═══════════════════════════════════════ */
+
+/* ── PASTE YOUR 3 VALUES HERE ── */
+const PUSH_SERVER   = 'https://timeflow-opal.vercel.app'; // ← your Vercel URL
+const VAPID_PUB_KEY = 'BAqktYcGYjC4nzE9t8azPvTWLNGjDBulVe_Wwb5NoBABRYzwBjb01BEWsxw4yhehqjmBdue7ByGQSTwH-3wmP9Y'; // ← from vapidkeys.com
+const NOTIFY_SECRET = 'timeflow2026';
+
+/* Convert VAPID key */
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64  = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
+  const rawData = window.atob(base64);
+  const arr     = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) arr[i] = rawData.charCodeAt(i);
+  return arr;
+}
+
+async function subscribeToPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    showToast('⚠️ Push not supported on this browser', 'error');
+    return false;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      showToast('❌ Please allow notifications for task reminders', 'error');
+      return false;
+    }
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub   = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUB_KEY)
+      });
+    }
+
+    const userId = currentUser?.uid || 'anonymous';
+    const res = await fetch(`${PUSH_SERVER}/api/subscribe`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ subscription: sub.toJSON(), userId })
+    });
+
+    if (res.ok) {
+      localStorage.setItem('tf_push_subscribed', 'true');
+      localStorage.setItem('tf_user_id', userId);
+      showToast('🔔 Push notifications enabled!', 'success');
+      playNotificationSound();
+      return true;
+    }
+    return false;
+  } catch(err) {
+    console.error('[Push] Error:', err);
+    showToast('❌ Notification error: ' + err.message, 'error');
+    return false;
   }
 }
 
-/* ── HEARTBEAT — keeps SW alive to check alarms ── */
-function startHeartbeat() {
-  if (!navigator.serviceWorker.controller) return;
-  setInterval(() => {
-    navigator.serviceWorker.controller?.postMessage({ type: 'HEARTBEAT' });
-  }, 55000); // every 55 seconds
-}
-
 async function requestNotificationPermission() {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission === 'granted') return true;
-  const perm = await Notification.requestPermission();
-  return perm === 'granted';
+  return subscribeToPush();
 }
 
 async function scheduleTaskReminders(taskList) {
-  const granted = await requestNotificationPermission();
-  if (!granted) return;
+  const userId = localStorage.getItem('tf_user_id') || currentUser?.uid;
+  if (!userId || !localStorage.getItem('tf_push_subscribed')) return;
 
-  const sw = navigator.serviceWorker.controller;
-  if (!sw) {
-    // SW not ready yet — retry in 2s
-    setTimeout(() => scheduleTaskReminders(taskList), 2000);
-    return;
-  }
-
-  // Clear old reminders first
-  sw.postMessage({ type: 'CLEAR_REMINDERS' });
-
-  taskList.forEach(task => {
-    if (task.done || !task.time || !task.date) return;
-
+  const now = Date.now();
+  for (const task of taskList) {
+    if (task.done || !task.time || !task.date) continue;
     const taskDateTime = new Date(`${task.date}T${task.time}`);
-    if (isNaN(taskDateTime)) return;
+    if (isNaN(taskDateTime)) continue;
 
-    const now = Date.now();
-
-    [18, 10].forEach(mins => {
+    for (const mins of [18, 10]) {
       const fireAt = taskDateTime.getTime() - mins * 60 * 1000;
-      if (fireAt <= now) return; // already passed
+      const delay  = fireAt - now;
+      if (delay < 0) continue;
 
-      sw.postMessage({
-        type:          'SCHEDULE_REMINDER',
-        taskName:      task.name || task.title || 'Task',
-        minutesBefore: mins,
-        fireAt
-      });
-    });
-  });
+      setTimeout(async () => {
+        try {
+          await fetch(`${PUSH_SERVER}/api/send-reminder`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+              userId,
+              taskName:      task.name || task.title || 'Task',
+              minutesBefore: mins,
+              secret:        NOTIFY_SECRET
+            })
+          });
+        } catch(e) {
+          console.warn('[Push] Reminder failed:', e);
+        }
+      }, delay);
+    }
+  }
 }
 
 function initReminders() {
   navigator.serviceWorker?.ready.then(() => {
-    startHeartbeat();
     if (typeof tasks !== 'undefined') scheduleTaskReminders(tasks);
   });
 }
 
 setTimeout(initReminders, 2000);
-
-/* Call this after tasks load */
-function initReminders() {
-  requestNotificationPermission();
-  if (typeof tasks !== 'undefined') scheduleTaskReminders(tasks);
-}
-
-setTimeout(initReminders, 3000);
 
 /* ── 2. SOUND ENGINE ── */
 function createAudioContext() {
@@ -860,25 +892,51 @@ initOfflineSync();
 
 /* ── 7. NOTIFICATION BELL IN TOPBAR ── */
 function addNotificationBell() {
+  const existing = document.getElementById('notifBell');
+  if (existing) existing.remove();
+
   const bell = document.createElement('button');
   bell.id = 'notifBell';
-  bell.innerHTML = '🔔';
-  bell.title = 'Enable task reminders';
+  const isOn = localStorage.getItem('tf_push_subscribed') === 'true';
+  bell.innerHTML = isOn ? '🔔' : '🔕';
+  bell.title     = isOn ? 'Notifications ON — click to test' : 'Enable task reminders';
   bell.style.cssText = `
-    background:none; border:1px solid rgba(108,99,255,0.3);
+    background:${isOn ? 'rgba(67,233,123,0.15)' : 'none'};
+    border:1px solid ${isOn ? '#43e97b' : 'rgba(108,99,255,0.3)'};
     color:#e8e8ff; border-radius:8px; width:36px; height:36px;
     font-size:15px; cursor:pointer; transition:all 0.2s;
     display:flex; align-items:center; justify-content:center;
   `;
+
   bell.addEventListener('click', async () => {
-    await requestNotificationPermission();
-    if (Notification.permission === 'granted') {
-      bell.style.background = 'rgba(67,233,123,0.15)';
-      bell.style.borderColor = '#43e97b';
-      bell.title = 'Reminders active ✓';
-      showToast('🔔 Task reminders are ON!', 'success');
-      playNotificationSound();
+    const ok = await subscribeToPush();
+    if (ok) {
+      bell.innerHTML = '🔔';
+      bell.style.background   = 'rgba(67,233,123,0.15)';
+      bell.style.borderColor  = '#43e97b';
+      bell.title = 'Notifications ON — click to send test';
       if (typeof tasks !== 'undefined') scheduleTaskReminders(tasks);
+
+      /* Send test notification after 5s so user can see it works */
+      showToast('⏳ Test notification coming in 5 seconds...', 'info');
+      setTimeout(async () => {
+        try {
+          const userId = localStorage.getItem('tf_user_id');
+          await fetch(`${PUSH_SERVER}/api/send-reminder`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+              userId,
+              taskName:      'TimeFlow is working!',
+              minutesBefore: 0,
+              secret:        NOTIFY_SECRET
+            })
+          });
+          showToast('🔔 Check your notification bar!', 'success');
+        } catch(e) {
+          showToast('⚠️ Could not reach server. Check Vercel deployment.', 'error');
+        }
+      }, 5000);
     }
   });
 
