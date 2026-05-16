@@ -3,7 +3,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDhZe_u6ZRUqgpjDELfrGN-tGZiE-FlTCU",
   authDomain: "timeflow-99313.firebaseapp.com",
   projectId: "timeflow-99313",
-  storageBucket: "timeflow-99313.appspot.com",
+  storageBucket: "timeflow-99313.firebasestorage.app",
   messagingSenderId: "342513941021",
   appId: "1:342513941021:web:19bea59034a629089ba4f4",
   measurementId: "G-3WNX601F2V"
